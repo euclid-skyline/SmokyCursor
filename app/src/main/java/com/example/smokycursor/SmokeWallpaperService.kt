@@ -4,8 +4,7 @@ import android.graphics.*
 import android.service.wallpaper.WallpaperService
 import android.view.MotionEvent
 import android.view.SurfaceHolder
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.*
 import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 
@@ -37,6 +36,7 @@ class SmokeWallpaperService : WallpaperService() {
             Color.argb(80, 255, 150, 100),
             Color.argb(0, 255, 150, 100)
         )
+
         // Touch tracking variables
         private var touchX = 0f
         private var touchY = 0f
@@ -44,29 +44,38 @@ class SmokeWallpaperService : WallpaperService() {
         private var isTouching = false      // Current touch state
         private var drawJob: Job? = null    // Animation coroutine reference
 
-        // Particle data class
+        // Add new smooth fade-out parameters
+        private val touchDecayRate = 0.92f        // Normal decay when touching
+        private val releaseDecayRate = 0.89f      // Accelerated decay when released
+        private var fadeOutProgress = 1f          // 1.0 -> 0.0 during fade
+        private val fadeOutDuration = 600L        // Fade duration in milliseconds
+        private var fadeOutJob: Job? = null
+
+        // Particle class
         private inner class Particle(
-            var x: Float,           // X position
-            var y: Float,           // Y position
-            var radius: Float,      // Current size
+            var x: Float,           // Current X position
+            var y: Float,           // Current Y position
+            var radius: Float,      // Current particle size
             var velocityX: Float,   // Horizontal speed
             var velocityY: Float,   // Vertical speed
-            var alpha: Int          // Transparency (0-255)
+            var alpha: Int,         // Current opacity (Transparency) (0-255)
+            var baseDecay: Float = touchDecayRate,  // Individual particle decay
+            var floatForce: Float = (Math.random() * 0.5 - 0.25).toFloat() // Random upward force
         )
 
-        // Starts the continuous drawing loop
+        // Animation Loop Management using continuous
         private fun startDrawing() {
             drawJob?.cancel()   // Cancel previous job if exists
             drawJob = launch {
                 while (isVisible) {
-                    draw()               // Draw frame
+                    drawFrame()               // Draw frame
                     delay(16)   // Maintain ~60 FPS
                 }
             }
         }
 
         // Main drawing method
-        private fun draw() {
+        private fun drawFrame() {
             val holder = surfaceHolder
             var canvas: Canvas? = null
             try {
@@ -79,6 +88,7 @@ class SmokeWallpaperService : WallpaperService() {
 
         // Handles particle system updates and rendering
         private fun drawSmoke(canvas: Canvas) {
+
             // Clear canvas with black background
             canvas.drawColor(Color.BLACK)
 
@@ -86,14 +96,16 @@ class SmokeWallpaperService : WallpaperService() {
             if (isTouching) {   // Creates 3 particles per frame
                 repeat(3) {
                     val angle = (Math.random() * 2 * Math.PI).toFloat()     // Random direction
-                    val speed = (Math.random() * 3 + 1).toFloat()           // Random speed
+                    val speed = (Math.random() * 3.5 + 1.5).toFloat()           // Random speed
                     particles.add(Particle(
                         touchX,             // Start at touch position
                         touchY,
-                        (Math.random() * 20 + 10).toFloat(), // Random size (10-30)
+                        (Math.random() * 22 + 12).toFloat(), // Random size (12-34)
                         cos(angle) * speed,  // X velocity component
                         sin(angle) * speed,  // Y velocity component
-                        255                     // Start fully visible
+                        255,                    // Start fully visible
+                        baseDecay = touchDecayRate,
+                        floatForce = (Math.random() * 0.6 - 0.3).toFloat()
                     ))
                 }
             }
@@ -103,19 +115,46 @@ class SmokeWallpaperService : WallpaperService() {
             while (iterator.hasNext()) {
                 val p = iterator.next()
 
+                // Apply smooth decay interpolation
+                val decay = if (isTouching) {
+                    p.baseDecay = touchDecayRate
+                    touchDecayRate
+                } else {
+                    // Gradually increase decay rate over time
+                    p.baseDecay = lerp(touchDecayRate, releaseDecayRate, 1 - fadeOutProgress)
+                    p.baseDecay
+                }
+
+
+                // Add floating effect when released
+                if (!isTouching) {
+                    p.velocityY += p.floatForce
+                    p.floatForce *= 0.95f
+                }
+
+                // Smooth alpha transition using easing function
+                p.alpha = (p.alpha * easeOutQuad(decay)).toInt()
+
+                // Radius decay with different curve
+                p.radius *= easeInOutQuad(decay)
+
+                p.velocityX *= decay
+                p.velocityY *= decay
+
+
                 // Update particle physics
                 p.x += p.velocityX          // Apply velocity
                 p.y += p.velocityY
 
                 // Determine decay rate based on touch state
-                val decayRate = if (isTouching) 0.92f else 0.85f
-                p.alpha = (p.alpha * decayRate).toInt() // Fade out
-                p.radius *= decayRate                   // Shrink size
-                p.velocityX *= decayRate                // Slow down
-                p.velocityY *= decayRate
+//                val decayRate = if (isTouching) 0.92f else 0.85f
+//                p.alpha = (p.alpha * decayRate).toInt() // Fade out
+//                p.radius *= decayRate                   // Shrink size
+//                p.velocityX *= decayRate                // Slow down
+//                p.velocityY *= decayRate
 
                 // Remove old particles
-                if (p.alpha < 5 || p.radius < 2) {
+                if (p.alpha < 4 || p.radius < 1.5f) {
                     iterator.remove()
                 } else {
                     paint.shader = RadialGradient(
@@ -137,13 +176,56 @@ class SmokeWallpaperService : WallpaperService() {
                     touchX = event.x        // Update touch position
                     touchY = event.y
                     isTouching = true       // Set touch state
+                    cancelFade()  // Reset fade if touching again
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     isTouching = false      // Clear touch state
+                    startFadeOutSequence()  // Begin smooth fade-out
                 }
             }
             super.onTouchEvent(event)
         }
+
+        private fun startFadeOutSequence() {
+            fadeOutJob?.cancel()
+            fadeOutProgress = 1f
+            fadeOutJob = launch {
+                val startTime = System.currentTimeMillis()
+                while (fadeOutProgress > 0) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    fadeOutProgress = 1 - (elapsed.toFloat() / fadeOutDuration)
+                    if (fadeOutProgress < 0) fadeOutProgress = 0f
+                    delay(16)
+                }
+            }
+        }
+
+        private fun cancelFade() {
+            fadeOutJob?.cancel()
+            fadeOutProgress = 1f
+        }
+
+        // Easing Functions for Smooth Transitions
+        private fun lerp(start: Float, end: Float, progress: Float) =
+            start + (end - start) * progress
+
+        private fun easeOutQuad(t: Float) =
+            t * (2 - t)
+
+        private fun easeInOutQuad(t: Float) =
+            if (t < 0.5f) 2 * t * t else -1 + (4 - 2 * t) * t
+
+//        private fun easeOutQuad(factor: Float) =
+//            1 - (1 - factor) * (1 - factor)  // Slow -> Fast transition
+//
+//        private fun easeInOutQuad(factor: Float) =
+//            if (factor < 0.5) {
+//                2 * factor.pow(2)
+//            }
+//            else {  // Slow -> Fast -> Slow
+//                val adjusted = 2f * factor - 1f
+//                1f - adjusted.pow(2) / 2f
+//            }
 
         // Handles visibility changes
         override fun onVisibilityChanged(visible: Boolean) {
