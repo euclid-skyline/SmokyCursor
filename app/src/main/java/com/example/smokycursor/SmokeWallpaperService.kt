@@ -37,31 +37,56 @@ class SmokeWallpaperService : WallpaperService() {
             Color.argb(0, 255, 150, 100)
         )
 
-        // Touch tracking variables
+        // Touch tracking and animation states variables
         private var touchX = 0f
         private var touchY = 0f
         private var isVisible = false       // Wallpaper visibility state
         private var isTouching = false      // Current touch state
         private var drawJob: Job? = null    // Animation coroutine reference
 
-        // Add new smooth fade-out parameters
-        private val touchDecayRate = 0.92f        // Normal decay when touching
-        private val releaseDecayRate = 0.89f      // Accelerated decay when released
+        // Smooth fade-out/decay parameters
+        private val touchDecay = 0.92f        // Normal decay when touching
+        private val releaseDecay = 0.89f      // Accelerated decay when released
         private var fadeOutProgress = 1f          // 1.0 -> 0.0 during fade
         private val fadeOutDuration = 600L        // Fade duration in milliseconds
-        private var fadeOutJob: Job? = null
+        private var fadeOutJob: Job? = null       // Fade-out coroutine reference
+
+        // Environmental Parameters
+        private val airResistance = 0.97f
+        private val noiseStrength = 0.15f
 
         // Particle class
         private inner class Particle(
-            var x: Float,           // Current X position
-            var y: Float,           // Current Y position
-            var radius: Float,      // Current particle size
-            var velocityX: Float,   // Horizontal speed
-            var velocityY: Float,   // Vertical speed
-            var alpha: Int,         // Current opacity (Transparency) (0-255)
-            var baseDecay: Float = touchDecayRate,  // Individual particle decay
-            var floatForce: Float = (Math.random() * 0.5 - 0.25).toFloat() // Random upward force
-        )
+            // Position Properties
+            var x: Float,        // Current X coordinate on screen
+            var y: Float,        // Current Y coordinate on screen
+            // Size Properties
+            var radius: Float,   // Current particle radius
+            val initialRadius: Float = radius,  // Original size at creation
+            // Motion Properties
+            var velocityX: Float,    // Horizontal movement speed (pixels/frame)
+            var velocityY: Float,    // Vertical movement speed (pixels/frame)
+            // Visual Properties
+            var alpha: Int,          // Opacity (0-255)
+            var baseDecay: Float = touchDecay,  // Individual decay rate
+            // Special Effects Properties
+            val floatForce: Float = (Math.random() * 0.6 - 0.3).toFloat(), // Vertical drift (-0.3 to +0.3)
+            var rotation: Float = (Math.random() * 360).toFloat(),
+            var rotationSpeed: Float = (Math.random() * 4 - 2).toFloat()
+        ) {
+            val sizeRatio: Float get() = radius / initialRadius.coerceAtLeast(1f)
+
+//            var lifeTime: Long = System.currentTimeMillis()
+//            val age: Long get() = System.currentTimeMillis() - lifeTime
+//
+//            // Track decay progression for this particle
+//            var decayProgress: Float = 1f
+//
+//            fun updateDecay(targetDecay: Float, delta: Float) {
+//                baseDecay += (targetDecay - baseDecay) * delta
+//                decayProgress = 1 - (baseDecay - touchDecay) / (releaseDecay - touchDecay)
+//            }
+        }
 
         // Animation Loop Management using continuous
         private fun startDrawing() {
@@ -80,83 +105,76 @@ class SmokeWallpaperService : WallpaperService() {
             var canvas: Canvas? = null
             try {
                 canvas = holder.lockCanvas()
-                canvas?.let { drawSmoke(it) }
+                canvas?.let { updateAndDrawParticles(it) }
             } finally {
                 canvas?.let { holder.unlockCanvasAndPost(it) }
             }
         }
 
         // Handles particle system updates and rendering
-        private fun drawSmoke(canvas: Canvas) {
-
+        private fun updateAndDrawParticles(canvas: Canvas) {
             // Clear canvas with black background
             canvas.drawColor(Color.BLACK)
 
-            // Generate new particles only while touching
+            // Generate new particles while touching
             if (isTouching) {   // Creates 3 particles per frame
                 repeat(3) {
                     val angle = (Math.random() * 2 * Math.PI).toFloat()     // Random direction
                     val speed = (Math.random() * 3.5 + 1.5).toFloat()           // Random speed
                     particles.add(Particle(
-                        touchX,             // Start at touch position
-                        touchY,
-                        (Math.random() * 22 + 12).toFloat(), // Random size (12-34)
-                        cos(angle) * speed,  // X velocity component
-                        sin(angle) * speed,  // Y velocity component
-                        255,                    // Start fully visible
-                        baseDecay = touchDecayRate,
-                        floatForce = (Math.random() * 0.6 - 0.3).toFloat()
+                        x = touchX,             // Start at touch position
+                        y = touchY,
+                        radius = (Math.random() * 22 + 12).toFloat(), // Random size (12-34)
+                        velocityX = cos(angle) * speed,  // X velocity component
+                        velocityY = sin(angle) * speed,  // Y velocity component
+                        alpha = 255,                    // Start fully visible
                     ))
                 }
             }
+
+            // Get current time for noise calculation
+            val currentTime = System.currentTimeMillis()
 
             // Update and draw particles
             val iterator = particles.iterator()
             while (iterator.hasNext()) {
                 val p = iterator.next()
 
-                // Apply smooth decay interpolation
-                val decay = if (isTouching) {
-                    p.baseDecay = touchDecayRate
-                    touchDecayRate
-                } else {
-                    // Gradually increase decay rate over time
-                    p.baseDecay = lerp(touchDecayRate, releaseDecayRate, 1 - fadeOutProgress)
-                    p.baseDecay
+                // 1. Update baseDecay for this particle
+                p.baseDecay = if (isTouching) {
+                    touchDecay
+                } else {  // Apply smooth decay interpolation
+                    lerp(touchDecay, releaseDecay, 1 - fadeOutProgress)
                 }
 
+                // 2. Apply environmental effects
+                // 2.a Air Resistance
+                p.velocityX *= airResistance
+                p.velocityY *= airResistance
+                // 2.b Add noise-based movement
+                val (noiseX, noiseY) = getNoiseInfluence(p.x, p.y, currentTime)
+                p.velocityX += noiseX
+                p.velocityY += noiseY
 
-                // Add floating effect when released
-                if (!isTouching) {
-                    p.velocityY += p.floatForce
-                    p.floatForce *= 0.95f
-                }
+                // 3. Update position with velocity and Vertical float force  and rotation
+                p.x += p.velocityX
+                p.y += p.velocityY - p.floatForce
+                p.rotation += p.rotationSpeed
 
-                // Smooth alpha transition using easing function
-                p.alpha = (p.alpha * easeOutQuad(decay)).toInt()
+                // 4. Apply decay with easing functions using particle's baseDecay
+                p.alpha = (p.alpha * easeOutQuad(p.baseDecay)).toInt()
+                p.radius *= easeInOutQuad(p.baseDecay)
+                p.velocityX *= p.baseDecay
+                p.velocityY *= p.baseDecay
 
-                // Radius decay with different curve
-                p.radius *= easeInOutQuad(decay)
+                // 5. Size-based opacity
+                p.alpha = (p.alpha * p.sizeRatio).toInt()
 
-                p.velocityX *= decay
-                p.velocityY *= decay
-
-
-                // Update particle physics
-                p.x += p.velocityX          // Apply velocity
-                p.y += p.velocityY
-
-                // Determine decay rate based on touch state
-//                val decayRate = if (isTouching) 0.92f else 0.85f
-//                p.alpha = (p.alpha * decayRate).toInt() // Fade out
-//                p.radius *= decayRate                   // Shrink size
-//                p.velocityX *= decayRate                // Slow down
-//                p.velocityY *= decayRate
-
-                // Remove old particles
+                // 6. Remove expired particles
                 if (p.alpha < 4 || p.radius < 1.5f) {
                     iterator.remove()
                 } else {
+                    // 9. Draw particle with rotation
                     paint.shader = RadialGradient(
                         p.x, p.y, p.radius,  // Center and size
                         colors,              // Color gradient
@@ -164,9 +182,22 @@ class SmokeWallpaperService : WallpaperService() {
                         Shader.TileMode.CLAMP
                     )
                     paint.alpha = p.alpha    // Set transparency
-                    canvas.drawCircle(p.x, p.y, p.radius, paint)
+                    canvas.run {
+                        save()
+                        rotate(p.rotation, p.x, p.y)
+                        drawCircle(p.x, p.y, p.radius, paint)
+                        restore()
+                    }
                 }
             }
+        }
+
+        private fun getNoiseInfluence(x: Float, y: Float, time: Long): Pair<Float, Float> {
+            val phase = (time % 60000) / 1000f * PI.toFloat()
+            return Pair(
+                cos(x * 0.01f + y * 0.02f + phase) * noiseStrength,
+                sin(x * 0.02f - y * 0.01f + phase) * noiseStrength
+            )
         }
 
         // Handles touch events
@@ -226,6 +257,8 @@ class SmokeWallpaperService : WallpaperService() {
 //                val adjusted = 2f * factor - 1f
 //                1f - adjusted.pow(2) / 2f
 //            }
+
+
 
         // Handles visibility changes
         override fun onVisibilityChanged(visible: Boolean) {
