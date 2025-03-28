@@ -25,18 +25,6 @@ class SmokeWallpaperService : WallpaperService() {
             style = Paint.Style.FILL
         }
 
-        // Gradient colors for smoke effect
-        // (semi-transparent grey to full transparency)
-//        private val colors = intArrayOf(
-//            Color.argb(80, 100, 100, 100),  // Inner color
-//            Color.argb(0, 100, 100, 100)    // Outer color
-//        )
-        // Orange smoke
-        private val colors = intArrayOf(
-            Color.argb(80, 255, 150, 100),
-            Color.argb(0, 255, 150, 100)
-        )
-
         // Touch tracking and animation states variables
         private var touchX = 0f
         private var touchY = 0f
@@ -72,12 +60,11 @@ class SmokeWallpaperService : WallpaperService() {
             // Special Effects Properties
             val floatForce: Float = (Math.random() * 0.6 - 0.3).toFloat(), // Vertical drift (-0.3 to +0.3)
             var rotation: Float = (Math.random() * 360).toFloat(),
-            var rotationSpeed: Float = (Math.random() * 4 - 2).toFloat()
+            var rotationSpeed: Float = (Math.random() * 4 - 2).toFloat(),
+            val creationTime: Long = System.currentTimeMillis()
         ) {
             val sizeRatio: Float get() = radius / initialRadius.coerceAtLeast(1f)
-
-//            var lifeTime: Long = System.currentTimeMillis()
-//            val age: Long get() = System.currentTimeMillis() - lifeTime
+            val age: Long get() = System.currentTimeMillis() - creationTime
 //
 //            // Track decay progression for this particle
 //            var decayProgress: Float = 1f
@@ -140,44 +127,52 @@ class SmokeWallpaperService : WallpaperService() {
             while (iterator.hasNext()) {
                 val p = iterator.next()
 
-                // 1. Update baseDecay for this particle
+                // 1. Age-based color transition (4 second duration)
+                val ageProgress = (p.age / 4000f).coerceIn(0f, 1f)
+                val startColor = Color.argb(p.alpha, 255, 150, 100) // Orange
+                val endColor = Color.argb(p.alpha, 30, 30, 150)     // Dark Blue
+                val currentColor = lerpColor(startColor, endColor, ageProgress)
+
+                // 2. Size-based physics adjustments
+                val sizeEffect = p.sizeRatio.pow(0.8f)
+
+                // 3. Update baseDecay with size influence
                 p.baseDecay = if (isTouching) {
-                    touchDecay
-                } else {  // Apply smooth decay interpolation
-                    lerp(touchDecay, releaseDecay, 1 - fadeOutProgress)
+                    lerp(touchDecay, 0.95f, sizeEffect)
+                } else {
+                    lerp(releaseDecay, 0.82f, sizeEffect)
                 }
 
-                // 2. Apply environmental effects
-                // 2.a Air Resistance
-                p.velocityX *= airResistance
-                p.velocityY *= airResistance
-                // 2.b Add noise-based movement
+                // 4. Apply size-modified physics
+                p.velocityX *= airResistance * (0.9f + 0.1f * sizeEffect)
+                p.velocityY *= airResistance * (0.9f + 0.1f * sizeEffect)
                 val (noiseX, noiseY) = getNoiseInfluence(p.x, p.y, currentTime)
-                p.velocityX += noiseX
-                p.velocityY += noiseY
+                p.velocityX += noiseX * sizeEffect
+                p.velocityY += noiseY * sizeEffect
 
-                // 3. Update position with velocity and Vertical float force  and rotation
+                // 5. Update position and rotation
                 p.x += p.velocityX
-                p.y += p.velocityY - p.floatForce
-                p.rotation += p.rotationSpeed
+                p.y += p.velocityY - p.floatForce * (1.2f - sizeEffect)
+                p.rotation += p.rotationSpeed * (1.5f - sizeEffect)
 
-                // 4. Apply decay with easing functions using particle's baseDecay
+                // 6. Apply decay using particle's baseDecay
                 p.alpha = (p.alpha * easeOutQuad(p.baseDecay)).toInt()
                 p.radius *= easeInOutQuad(p.baseDecay)
-                p.velocityX *= p.baseDecay
-                p.velocityY *= p.baseDecay
 
-                // 5. Size-based opacity
-                p.alpha = (p.alpha * p.sizeRatio).toInt()
+                // 7. Create gradient with age-based color
+                val gradientColors = intArrayOf(
+                    currentColor,
+                    Color.argb(0, Color.red(currentColor), Color.green(currentColor), Color.blue(currentColor))
+                )
 
-                // 6. Remove expired particles
+                // 8. Remove expired particles
                 if (p.alpha < 4 || p.radius < 1.5f) {
                     iterator.remove()
                 } else {
                     // 9. Draw particle with rotation
                     paint.shader = RadialGradient(
                         p.x, p.y, p.radius,  // Center and size
-                        colors,              // Color gradient
+                        gradientColors,              // Color gradient
                         null,          // No position array
                         Shader.TileMode.CLAMP
                     )
@@ -199,6 +194,51 @@ class SmokeWallpaperService : WallpaperService() {
                 sin(x * 0.02f - y * 0.01f + phase) * noiseStrength
             )
         }
+
+        // Helper function for color interpolation
+        private fun lerpColor(start: Int, end: Int, factor: Float): Int {
+            val startA = Color.alpha(start)
+            val startR = Color.red(start)
+            val startG = Color.green(start)
+            val startB = Color.blue(start)
+
+            val endA = Color.alpha(end)
+            val endR = Color.red(end)
+            val endG = Color.green(end)
+            val endB = Color.blue(end)
+
+            return Color.argb(
+                (startA + (endA - startA) * factor).toInt(),
+                (startR + (endR - startR) * factor).toInt(),
+                (startG + (endG - startG) * factor).toInt(),
+                (startB + (endB - startB) * factor).toInt()
+            )
+        }
+
+        // Easing Functions for Smooth Transitions
+        private fun lerp(start: Float, end: Float, progress: Float) =
+            start + (end - start) * progress
+
+        private fun easeOutQuad(t: Float) =
+            t * (2 - t)
+
+        private fun easeInOutQuad(t: Float) =
+            if (t < 0.5f) 2 * t * t else -1 + (4 - 2 * t) * t
+
+//        private fun easeOutQuad(factor: Float) =
+//            1 - (1 - factor) * (1 - factor)  // Slow -> Fast transition
+//
+//        private fun easeInOutQuad(factor: Float) =
+//            if (factor < 0.5) {
+//                2 * factor.pow(2)
+//            }
+//            else {  // Slow -> Fast -> Slow
+//                val adjusted = 2f * factor - 1f
+//                1f - adjusted.pow(2) / 2f
+//            }
+
+//        // New easing function for slow start
+//        private fun easeInQuad(factor: Float): Float = factor * factor
 
         // Handles touch events
         override fun onTouchEvent(event: MotionEvent) {
@@ -236,27 +276,6 @@ class SmokeWallpaperService : WallpaperService() {
             fadeOutProgress = 1f
         }
 
-        // Easing Functions for Smooth Transitions
-        private fun lerp(start: Float, end: Float, progress: Float) =
-            start + (end - start) * progress
-
-        private fun easeOutQuad(t: Float) =
-            t * (2 - t)
-
-        private fun easeInOutQuad(t: Float) =
-            if (t < 0.5f) 2 * t * t else -1 + (4 - 2 * t) * t
-
-//        private fun easeOutQuad(factor: Float) =
-//            1 - (1 - factor) * (1 - factor)  // Slow -> Fast transition
-//
-//        private fun easeInOutQuad(factor: Float) =
-//            if (factor < 0.5) {
-//                2 * factor.pow(2)
-//            }
-//            else {  // Slow -> Fast -> Slow
-//                val adjusted = 2f * factor - 1f
-//                1f - adjusted.pow(2) / 2f
-//            }
 
 
 
