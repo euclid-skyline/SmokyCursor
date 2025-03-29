@@ -57,41 +57,6 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         // =====================================================================
-        // Particle Class Definition
-        // =====================================================================
-
-        private inner class Particle(
-            // Position properties
-            var x: Float,        // Current X position
-            var y: Float,        // Current Y position
-
-            // Size properties
-            var radius: Float,   // Current radius
-            val initialRadius: Float = radius,  // Original size
-
-            // Movement properties
-            var velocityX: Float,    // Horizontal velocity
-            var velocityY: Float,    // Vertical velocity
-            var baseDecay: Float,    // Current decay rate
-
-            // Visual properties
-            var alpha: Int,          // Opacity (0-255)
-
-            // Special effects
-            val floatForce: Float = (Math.random() * baseFloatForce - baseFloatForce/2).toFloat(),
-            var rotation: Float = (Math.random() * 360).toFloat(),
-            var rotationSpeed: Float = (Math.random() * baseRotationSpeed - baseRotationSpeed/2).toFloat()
-        ) {
-            // Lifecycle tracking
-            val creationTime: Long = System.currentTimeMillis()
-
-            // Calculated properties
-            val age: Long get() = System.currentTimeMillis() - creationTime
-            val sizeRatio: Float
-                get() = (radius / initialRadius.coerceAtLeast(1f)).coerceIn(0.1f, 1f)
-        }
-
-        // =====================================================================
         // Core Wallpaper Engine Implementation
         // =====================================================================
 
@@ -163,7 +128,10 @@ class SmokeWallpaperService : WallpaperService() {
                         velocityX = cos(angle) * speed,
                         velocityY = sin(angle) * speed,
                         baseDecay = touchDecay,
-                        alpha = 255
+                        alpha = 255,
+                        floatForce = (Math.random() * baseFloatForce - baseFloatForce/2).toFloat(),
+                        rotation = (Math.random() * 360).toFloat(),
+                        rotationSpeed = (Math.random() * baseRotationSpeed - baseRotationSpeed/2).toFloat(),
                     ))
                 }
             }
@@ -174,7 +142,7 @@ class SmokeWallpaperService : WallpaperService() {
                 val p = iterator.next()
 
                 // 1. Calculate lifecycle phases
-                val colorProgress = (p.age / colorTransitionDuration.toFloat()).coerceIn(0f, 1f)
+//                val colorProgress = (p.age / colorTransitionDuration.toFloat()).coerceIn(0f, 1f)
                 val fadeProgress = if (p.age > colorTransitionDuration) {
                     ((p.age - colorTransitionDuration) / fadeOutDuration.toFloat()).coerceIn(0f, 1f)
                 } else 0f
@@ -184,7 +152,8 @@ class SmokeWallpaperService : WallpaperService() {
                 val inverseSizeEffect = 1.25f - sizeEffect
 
                 // 3. Color transition calculation
-                val currentColor = lerpColor(startColor, endColor, colorProgress)
+//                val currentColor = lerpColor(startColor, endColor, colorProgress)
+                val currentColor = p.getCurrentColor(startColor, endColor, colorTransitionDuration)
 
                 // 4. Physics updates using sizeRatio
                 p.velocityX *= airResistance * (0.92f + 0.08f * sizeEffect)
@@ -228,8 +197,11 @@ class SmokeWallpaperService : WallpaperService() {
                 } else {
                     // 10. Draw particle
                     paint.shader = RadialGradient(
-                        p.x, p.y, p.radius,
-                        gradientColors, null, Shader.TileMode.CLAMP
+                        p.x, p.y,
+                        p.radius,
+                        gradientColors,
+                        null,
+                        Shader.TileMode.CLAMP
                     )
                     canvas.run {
                         save()
@@ -289,15 +261,6 @@ class SmokeWallpaperService : WallpaperService() {
             return Pair(
                 cos(x * 0.012f + y * 0.018f + phase) * 0.22f,
                 sin(x * 0.015f - y * 0.022f + phase) * 0.22f
-            )
-        }
-
-        private fun lerpColor(start: Int, end: Int, factor: Float): Int {
-            return Color.argb(
-                (Color.alpha(start) + (Color.alpha(end) - Color.alpha(start)) * factor).toInt(),
-                (Color.red(start) + (Color.red(end) - Color.red(start)) * factor).toInt(),
-                (Color.green(start) + (Color.green(end) - Color.green(start)) * factor).toInt(),
-                (Color.blue(start) + (Color.blue(end) - Color.blue(start)) * factor).toInt()
             )
         }
 
