@@ -115,102 +115,143 @@ class SmokeWallpaperService : WallpaperService() {
 
         private fun updateAndDrawParticles(canvas: Canvas) {
             canvas.drawColor(Color.BLACK)
+            generateNewParticles()
+            processExistingParticles(canvas)
+        }
 
-            // Generate new particles while touching
-            if (isTouching) {
-                repeat(3) {
-                    val angle = (Math.random() * 2 * PI).toFloat()
-                    val speed = (Math.random() * 3.8 + 1.8).toFloat()
-                    particles.add(Particle(
-                        x = touchX,
-                        y = touchY,
-                        radius = (Math.random() * 24 + 14).toFloat(),
-                        velocityX = cos(angle) * speed,
-                        velocityY = sin(angle) * speed,
-                        baseDecay = touchDecay,
-                        alpha = 255,
-                        floatForce = (Math.random() * baseFloatForce - baseFloatForce/2).toFloat(),
-                        rotation = (Math.random() * 360).toFloat(),
-                        rotationSpeed = (Math.random() * baseRotationSpeed - baseRotationSpeed/2).toFloat(),
-                    ))
-                }
+        // Generate new particles while touching
+        private fun generateNewParticles() {
+            if (!isTouching) return
+
+            repeat(3) {
+                particles.add(createParticleInstance())
             }
+        }
 
+        private fun createParticleInstance(): Particle {
+            val angle = (Math.random() * 2 * PI).toFloat()
+            val speed = (Math.random() * 3.8 + 1.8).toFloat()
+            return Particle(
+                x = touchX,
+                y = touchY,
+                radius = (Math.random() * 24 + 14).toFloat(),
+                velocityX = cos(angle) * speed,
+                velocityY = sin(angle) * speed,
+                baseDecay = touchDecay,
+                alpha = 255,
+                floatForce = (Math.random() * baseFloatForce - baseFloatForce/2).toFloat(),
+                rotation = (Math.random() * 360).toFloat(),
+                rotationSpeed = (Math.random() * baseRotationSpeed - baseRotationSpeed/2).toFloat(),
+            )
+        }
+
+        private fun processExistingParticles(canvas: Canvas) {
             val currentTime = System.currentTimeMillis()
             val iterator = particles.iterator()
+
             while (iterator.hasNext()) {
                 val p = iterator.next()
 
-                // 1. Calculate lifecycle phases
-//                val colorProgress = (p.age / colorTransitionDuration.toFloat()).coerceIn(0f, 1f)
-                val fadeProgress = if (p.age > colorTransitionDuration) {
-                    ((p.age - colorTransitionDuration) / fadeOutDuration.toFloat()).coerceIn(0f, 1f)
-                } else 0f
+//                updateParticlePhysicsAndDecay(p, currentTime)
 
-                // 2. Calculate size-impact coefficients
-                val sizeEffect = p.sizeRatio.pow(0.75f)
-                val inverseSizeEffect = 1.25f - sizeEffect
-
-                // 3. Color transition calculation
-//                val currentColor = lerpColor(startColor, endColor, colorProgress)
-                val currentColor = p.getCurrentColor(startColor, endColor, colorTransitionDuration)
-
-                // 4. Physics updates using sizeRatio
-                p.velocityX *= airResistance * (0.92f + 0.08f * sizeEffect)
-                p.velocityY *= airResistance * (0.92f + 0.08f * sizeEffect)
-
-                val (noiseX, noiseY) = getNoiseInfluence(p.x, p.y, currentTime)
-                p.velocityX += noiseX * inverseSizeEffect * noiseStrength
-                p.velocityY += noiseY * inverseSizeEffect * noiseStrength
-
-                // 5. Position and rotation updates
-                p.x += p.velocityX
-                p.y += p.velocityY - p.floatForce * inverseSizeEffect
-                p.rotation += p.rotationSpeed * (1.4f - sizeEffect * 0.4f)
-
-                // 6. Size and decay updates
-                p.baseDecay = if (isTouching) {
-                    lerp(touchDecay, 0.96f, sizeEffect)
-                } else {
-                    lerp(releaseDecay, 0.84f, sizeEffect)
-                }
-                p.radius *= easeInOutQuad(p.baseDecay)
-
-                // 7. Alpha management
-                val finalAlpha = (p.alpha * (1 - fadeProgress)).toInt()
-
-                // 8. Create gradient
-                val gradientColors = intArrayOf(
-                    Color.argb(finalAlpha,
-                        Color.red(currentColor),
-                        Color.green(currentColor),
-                        Color.blue(currentColor)),
-                    Color.argb(0,
-                        Color.red(currentColor),
-                        Color.green(currentColor),
-                        Color.blue(currentColor))
-                )
-
-                // 9. Remove expired particles
-                if (finalAlpha < 4 || p.radius < 1.5f) {
+                // 9. Remove expired particles if required
+                if (shouldRemoveParticle(p)) {
                     iterator.remove()
-                } else {
-                    // 10. Draw particle
-                    paint.shader = RadialGradient(
-                        p.x, p.y,
-                        p.radius,
-                        gradientColors,
-                        null,
-                        Shader.TileMode.CLAMP
-                    )
-                    canvas.run {
-                        save()
-                        rotate(p.rotation, p.x, p.y)
-                        drawCircle(p.x, p.y, p.radius, paint)
-                        restore()
-                    }
+                    continue
                 }
+
+                updateParticlePhysicsAndDecay(p, currentTime)
+
+                drawParticle(p, canvas)
+
             }
+        }
+
+        private fun updateParticlePhysicsAndDecay(p: Particle, currentTime: Long) {
+            // 2. Calculate size-impact coefficients
+            val sizeEffect = p.sizeRatio.pow(0.75f)
+            val inverseSizeEffect = 1.25f - sizeEffect
+
+            // 4. Physics updates using sizeRatio
+            p.velocityX *= airResistance * (0.92f + 0.08f * sizeEffect)
+            p.velocityY *= airResistance * (0.92f + 0.08f * sizeEffect)
+
+            val (noiseX, noiseY) = getNoiseInfluence(p.x, p.y, currentTime)
+            p.velocityX += noiseX * inverseSizeEffect * noiseStrength
+            p.velocityY += noiseY * inverseSizeEffect * noiseStrength
+
+            // 5. Position and rotation updates
+            p.x += p.velocityX
+            p.y += p.velocityY - p.floatForce * inverseSizeEffect
+            p.rotation += p.rotationSpeed * (1.4f - sizeEffect * 0.4f)
+
+            // 6. Size and decay updates
+            p.baseDecay = if (isTouching) {
+                lerp(touchDecay, 0.96f, sizeEffect)
+            } else {
+                lerp(releaseDecay, 0.84f, sizeEffect)
+            }
+            p.radius *= easeInOutQuad(p.baseDecay)
+        }
+
+        private fun calculateParticleAlpha(p: Particle): Int {
+            // 1. Calculate lifecycle phases
+            val fadeProgress = if (p.age > colorTransitionDuration) {
+                ((p.age - colorTransitionDuration) / fadeOutDuration.toFloat()).coerceIn(0f, 1f)
+            } else 0f
+
+            // 7. Alpha management
+            val finalAlpha = (p.alpha * (1 - fadeProgress)).toInt()
+
+            return finalAlpha
+        }
+
+        private fun shouldRemoveParticle(p: Particle): Boolean {
+            // 7. Alpha management
+            val finalAlpha = calculateParticleAlpha(p)
+
+            return (finalAlpha < 4 || p.radius < 1.5f)
+        }
+
+        private fun drawParticle(p: Particle, canvas: Canvas) {
+            paint.shader = createParticleGradient(p)
+
+            canvas.run {
+                save()
+                rotate(p.rotation, p.x, p.y)
+                drawCircle(p.x, p.y, p.radius, paint)
+                restore()
+            }
+        }
+
+        private fun createParticleGradient(p: Particle): Shader {
+            // 3. Color transition calculation
+            val currentColor = p.getCurrentColor(startColor, endColor, colorTransitionDuration)
+            val finalAlpha = calculateParticleAlpha(p)
+
+            // 8. Create color gradient
+            val gradientColors = intArrayOf(
+                Color.argb(
+                    finalAlpha,
+                    Color.red(currentColor),
+                    Color.green(currentColor),
+                    Color.blue(currentColor)
+                ),
+                Color.argb(
+                    0,
+                    Color.red(currentColor),
+                    Color.green(currentColor),
+                    Color.blue(currentColor)
+                )
+            )
+
+            return RadialGradient(
+                p.x, p.y,
+                p.radius,
+                gradientColors,
+                null,
+                Shader.TileMode.CLAMP
+            )
         }
 
         // =====================================================================
