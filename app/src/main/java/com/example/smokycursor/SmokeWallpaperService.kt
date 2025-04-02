@@ -35,18 +35,18 @@ class SmokeWallpaperService : WallpaperService() {
         // Physics parameters
         private val airResistance = 0.95f        // Air friction coefficient
         private val noiseStrength = 0.25f        // Strength of random movement
-        private val baseFloatForce = 0.3f       // Base upward/downward drift
+        private val baseFloatForce = 0.3f        // Base upward/downward drift
         private val baseRotationSpeed = 2.2f     // Degrees per frame
 
         // Decay parameters
         private val touchDecay = 0.94f           // Decay rate while touching
-        private val releaseDecay = 0.82f         // Decay rate after release
-        private val fadeOutDuration = 5000L         // Fade-out duration (ms)
+        private val releaseDecay = 1.1f          // Decay rate after release
+        private val fadeOutDuration = 5000L      // Fade-out duration in ms
         private var fadeOutProgress = 1f
-        private var fadeOutJob: Job? = null       // Fade-out coroutine reference
+        private var fadeOutJob: Job? = null      // Fade-out coroutine reference
 
         // Color transition parameters
-        private val colorTransitionDuration = 3000L  // Orange→Blue transition time
+        private val colorTransitionDuration = 3000L     // Orange → Blue transition time in ms
         private val startColor = Color.argb(255, 255, 150, 100)  // Orange
         private val endColor = Color.argb(255, 30, 30, 150)      // Dark Blue
 
@@ -123,7 +123,7 @@ class SmokeWallpaperService : WallpaperService() {
         private fun generateNewParticles() {
             if (!isTouching) return
 
-            repeat(3) {
+            repeat(5) {
                 particles.add(createParticleInstance())
             }
         }
