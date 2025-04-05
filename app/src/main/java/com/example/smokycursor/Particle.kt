@@ -24,19 +24,21 @@ class Particle(
     var alpha: Int,          // Opacity (0-255)
 
     // Special effects
-    val floatForce: Float,
+    var floatForce: Float,
     var rotation: Float,
-    var rotationSpeed: Float
+    var rotationSpeed: Float,
+//    var age: Long = 0L
 ) {
-    private val initialRadius: Float = radius  // Original size
-    // Lifecycle tracking
-    private val creationTime: Long = System.currentTimeMillis()
 
-    // Calculated properties
-    val age: Long get() = System.currentTimeMillis() - creationTime
-
+    private var initialRadius: Float = radius  // Particle's initial radius size at creation time
     val sizeRatio: Float
         get() = (radius / initialRadius.coerceAtLeast(1f)).coerceIn(0.1f, 1f)
+//    val sizeRatio: Float
+//        get() = radius.coerceIn(0.1f, 1f)
+
+    // Lifecycle tracking
+    private var creationTime: Long = System.currentTimeMillis()     // Particle creation timestamp in milliseconds
+    val age: Long get() = System.currentTimeMillis() - creationTime
 
     fun getCurrentColor(start: Int, end: Int, transitionDuration: Long): Int {
         val progress = (age / transitionDuration.toFloat()).coerceIn(0f, 1f)
@@ -50,5 +52,30 @@ class Particle(
             (Color.green(start) + (Color.green(end) - Color.green(start)) * factor).toInt(),
             (Color.blue(start) + (Color.blue(end) - Color.blue(start)) * factor).toInt()
         )
+    }
+
+    // Add reset functionality for pooling
+    fun reset(
+        x: Float, y: Float,
+        radius: Float,
+        velocityX: Float, velocityY: Float,
+        baseDecay: Float,
+        alpha: Int,
+        floatForce: Float,
+        rotation: Float,
+        rotationSpeed: Float
+    ) {
+        this.x = x
+        this.y = y
+        this.radius = radius
+        this.velocityX = velocityX
+        this.velocityY = velocityY
+        this.baseDecay = baseDecay
+        this.alpha = alpha
+        this.floatForce = floatForce
+        this.rotation = rotation
+        this.rotationSpeed = rotationSpeed
+        // Reset timestamps
+        creationTime = System.currentTimeMillis()
     }
 }

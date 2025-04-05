@@ -42,7 +42,7 @@ class SmokeWallpaperService : WallpaperService() {
         private val touchDecay = 0.94f           // Decay rate while touching
         private val releaseDecay = 1.1f          // Decay rate after release
         private val fadeOutDuration = 5000L      // Fade-out duration in ms
-        private var fadeOutProgress = 1f
+        private var fadeOutProgress = 1f         // The progress of the fade-out animation, where 1.0f is fully visible and 0.0f is completely faded-out
         private var fadeOutJob: Job? = null      // Fade-out coroutine reference
 
         // Color transition parameters
@@ -55,6 +55,9 @@ class SmokeWallpaperService : WallpaperService() {
             isAntiAlias = true
             style = Paint.Style.FILL
         }
+
+        // Add synchronization object
+        private val particleLock = Any()
 
         // =====================================================================
         // Core Wallpaper Engine Implementation
@@ -123,15 +126,18 @@ class SmokeWallpaperService : WallpaperService() {
         private fun generateNewParticles() {
             if (!isTouching) return
 
-            repeat(5) {
-                particles.add(createParticleInstance())
+            synchronized(particleLock) {
+                repeat(3) {
+                    particles.add(createParticleInstance())
+                }
             }
         }
 
         private fun createParticleInstance(): Particle {
             val angle = (Math.random() * 2 * PI).toFloat()
             val speed = (Math.random() * 3.8 + 1.8).toFloat()
-            return Particle(
+
+            return ParticlePool.obtainParticle(
                 x = touchX,
                 y = touchY,
                 radius = (Math.random() * 24 + 14).toFloat(),
@@ -146,24 +152,26 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         private fun processExistingParticles(canvas: Canvas) {
-            val currentTime = System.currentTimeMillis()
-            val iterator = particles.iterator()
+            synchronized(particleLock) {
+                val currentTime = System.currentTimeMillis()
+                val iterator = particles.iterator()
 
-            while (iterator.hasNext()) {
-                val p = iterator.next()
+                while (iterator.hasNext()) {
+                    val p = iterator.next()
+//                p.age++     // Increment the age for each frame assuming we're drawing at 60 FPS
 
 //                updateParticlePhysicsAndDecay(p, currentTime)
 
-                // 9. Remove expired particles if required
-                if (shouldRemoveParticle(p)) {
-                    iterator.remove()
-                    continue
+                    // 9. Remove expired particles if required
+                    if (shouldRemoveParticle(p)) {
+                        ParticlePool.recycle(p)
+                        iterator.remove()
+                        continue
+                    }
+
+                    updateParticlePhysicsAndDecay(p, currentTime)
+                    drawParticle(p, canvas)
                 }
-
-                updateParticlePhysicsAndDecay(p, currentTime)
-
-                drawParticle(p, canvas)
-
             }
         }
 
