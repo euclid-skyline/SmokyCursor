@@ -27,7 +27,7 @@ The important classes in App are as the following:
  -   **Dynamic Color Transition:** Smoothly transitions each particle's color from a vibrant orange to a deep blue hue over time.
  -   **Organic Decay and Fading:** Particles gradually shrink in size and fade out in opacity as they age, mimicking the dissipation of real smoke.
  -   **Optimized Rendering:** Employs coroutines for smooth, frame-by-frame animation updates and efficient rendering.
- * -   **Customizable Behavior:** Offers a wide array of tunable parameters, allowing for adjustments to particle count, physics properties, color schemes, and more.
+ -   **Customizable Behavior:** Offers a wide array of tunable parameters, allowing for adjustments to particle count, physics properties, color schemes, and more.
  
  ### Implementation Details:
  
@@ -36,9 +36,9 @@ The important classes in App are as the following:
  -   **Particle System:** Manages a collection of `Particle` objects, each representing a single puff of smoke.
  -   **Touch Interaction:** Processes touch events (`ACTION_DOWN`, `ACTION_MOVE`, `ACTION_UP`, `ACTION_CANCEL`) to dynamically control particle generation and behavior.
  -   **Canvas Drawing:** Leverages Android's `Canvas` API to draw particles onto the wallpaper surface.
- - **Physics simulation** Simulate `airResistance`, `noise`, `buoyancy` and `rotation`.
- - **Size and decay management** Manage the particle size and its decay rate.
- - **Fade out system** Allow to fade out particles using a coroutine.
+ -   **Physics simulation** Simulate `airResistance`, `noise`, `buoyancy` and `rotation`.
+ -   **Size and decay management** Manage the particle size and its decay rate.
+ -   **Fade out system** Allow to fade out particles using a coroutine.
 
 ### How it works:
 
