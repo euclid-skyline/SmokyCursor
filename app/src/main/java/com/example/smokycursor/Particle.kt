@@ -78,4 +78,22 @@ class Particle(
         // Reset timestamps
         creationTime = System.currentTimeMillis()
     }
+
+    // Factory method to create a new Particle instance
+    companion object {
+        fun create(
+            x: Float,
+            y: Float,
+            radius: Float,
+            velocityX: Float,
+            velocityY: Float,
+            baseDecay: Float,
+            alpha: Int,
+            floatForce: Float,
+            rotation: Float,
+            rotationSpeed: Float
+        ): Particle {
+            return Particle(x, y, radius, velocityX, velocityY, baseDecay, alpha, floatForce, rotation, rotationSpeed)
+        }
+    }
 }

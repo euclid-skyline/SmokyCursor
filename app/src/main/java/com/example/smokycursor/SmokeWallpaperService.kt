@@ -137,7 +137,7 @@ class SmokeWallpaperService : WallpaperService() {
             val angle = (Math.random() * 2 * PI).toFloat()
             val speed = (Math.random() * 3.8 + 1.8).toFloat()
 
-            return ParticlePool.obtainParticle(
+            return ParticlePool.obtain(
                 x = touchX,
                 y = touchY,
                 radius = (Math.random() * 24 + 14).toFloat(),
