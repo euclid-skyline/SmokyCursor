@@ -56,8 +56,24 @@ class SmokeWallpaperService : WallpaperService() {
             style = Paint.Style.FILL
         }
 
-        // Add synchronization object
+        // Synchronized particle pool management
         private val particleLock = Any()
+
+        // FPS tracking variables
+        private var frameCount = 0
+        private var lastFpsUpdateTime = System.nanoTime()
+        private var currentFPS = 0f
+        private val fpsUpdateInterval = 1_000_000_000L // 1 second in nanoseconds
+        private var totalFrameTimeNanos = 0L
+        private var fpsVisible = true
+
+        // FPS display properties
+        private val fpsPaint = Paint().apply {
+            color = Color.GREEN
+            textSize = 40f
+            typeface = Typeface.MONOSPACE
+        }
+        private val fpsPosition = PointF(20f, 200f)     // Top-left corner
 
         // =====================================================================
         // Core Wallpaper Engine Implementation
@@ -66,6 +82,12 @@ class SmokeWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             isVisible = visible
             if (visible) {
+
+                // Reset FPS counters
+                frameCount = 0
+                totalFrameTimeNanos = 0L
+                lastFpsUpdateTime = System.nanoTime()
+
                 startDrawing()
             } else {
                 stopDrawing()
@@ -102,14 +124,27 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         private fun drawFrame() {
+            val startTime = System.nanoTime()
             val holder = surfaceHolder
             var canvas: Canvas? = null
+
             try {
                 canvas = holder.lockCanvas()
-                canvas?.let { updateAndDrawParticles(it) }
+                canvas?.let {
+                    // Existing particle drawing
+                    updateAndDrawParticles(it)
+
+                    // Draw FPS overlay
+                    if (fpsVisible) drawFpsOverlay(it)
+
+                }
             } finally {
                 canvas?.let { holder.unlockCanvasAndPost(it) }
             }
+
+            val frameTimeNanos = System.nanoTime() - startTime
+            // Update FPS counter
+            updateFpsCounter(frameTimeNanos)
         }
 
         // =====================================================================
@@ -318,6 +353,46 @@ class SmokeWallpaperService : WallpaperService() {
 
         private fun easeInOutQuad(t: Float): Float {
             return if (t < 0.5) 2 * t * t else 1 - (-2 * t + 2).let { it * it } / 2
+        }
+
+        // =====================================================================
+        // New FPS drawing method
+        // =====================================================================
+
+        private fun drawFpsOverlay(canvas: Canvas) {
+            val fpsText = "FPS: ${"%.1f".format(currentFPS)}"
+
+            // Background for readability
+            canvas.drawRect(
+                fpsPosition.x - 10f,
+                fpsPosition.y - 40f,
+                fpsPosition.x + 230f,
+                fpsPosition.y + 10f,
+                Paint().apply {
+                    color = Color.argb(150, 255, 150, 100)
+                }
+            )
+
+            // FPS text
+            canvas.drawText(fpsText, fpsPosition.x, fpsPosition.y, fpsPaint)
+        }
+
+        private fun updateFpsCounter(frameTimeNanos: Long) {
+            frameCount++
+            totalFrameTimeNanos += frameTimeNanos
+
+            val elapsedSinceUpdate = System.nanoTime() - lastFpsUpdateTime
+            if (elapsedSinceUpdate >= fpsUpdateInterval) { // 1 second
+                currentFPS = when {
+                    totalFrameTimeNanos == 0L -> 0f
+                    else -> fpsUpdateInterval / (totalFrameTimeNanos / frameCount.toFloat())
+                }.coerceAtMost(60f)
+
+                // Reset counters
+                frameCount = 0
+                totalFrameTimeNanos = 0L
+                lastFpsUpdateTime = System.nanoTime()
+            }
         }
     }
 }
