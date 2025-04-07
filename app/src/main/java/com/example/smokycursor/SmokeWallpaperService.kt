@@ -75,6 +75,8 @@ class SmokeWallpaperService : WallpaperService() {
         }
         private val fpsPosition = PointF(20f, 200f)     // Top-left corner
 
+        private var lastUpdateTime = System.nanoTime()          // Last Frame age in nanoseconds
+
         // =====================================================================
         // Core Wallpaper Engine Implementation
         // =====================================================================
@@ -152,9 +154,14 @@ class SmokeWallpaperService : WallpaperService() {
         // =====================================================================
 
         private fun updateAndDrawParticles(canvas: Canvas) {
+            val now = System.nanoTime()
+            val deltaTimeMillis = (now - lastUpdateTime) / 1_000_000  // ns → ms
+            lastUpdateTime = now
+
+            // Clear the canvas
             canvas.drawColor(Color.BLACK)
             generateNewParticles()
-            processExistingParticles(canvas)
+            processExistingParticles(canvas, deltaTimeMillis)
         }
 
         // Generate new particles while touching
@@ -186,16 +193,13 @@ class SmokeWallpaperService : WallpaperService() {
             )
         }
 
-        private fun processExistingParticles(canvas: Canvas) {
+        private fun processExistingParticles(canvas: Canvas, deltaTimeMillis: Long) {
             synchronized(particleLock) {
-                val currentTime = System.currentTimeMillis()
                 val iterator = particles.iterator()
-
                 while (iterator.hasNext()) {
                     val p = iterator.next()
-//                p.age++     // Increment the age for each frame assuming we're drawing at 60 FPS
 
-//                updateParticlePhysicsAndDecay(p, currentTime)
+//                updateParticlePhysicsAndDecay(p)
 
                     // 9. Remove expired particles if required
                     if (shouldRemoveParticle(p)) {
@@ -204,13 +208,17 @@ class SmokeWallpaperService : WallpaperService() {
                         continue
                     }
 
-                    updateParticlePhysicsAndDecay(p, currentTime)
+                    // Update age in milliseconds
+                    p.age += deltaTimeMillis
+                    updateParticlePhysicsAndDecay(p)
                     drawParticle(p, canvas)
                 }
             }
         }
 
-        private fun updateParticlePhysicsAndDecay(p: Particle, currentTime: Long) {
+        private fun updateParticlePhysicsAndDecay(p: Particle) {
+            val currentTime = System.currentTimeMillis()
+
             // 2. Calculate size-impact coefficients
             val sizeEffect = p.sizeRatio.pow(0.75f)
             val inverseSizeEffect = 1.25f - sizeEffect
@@ -250,10 +258,8 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         private fun shouldRemoveParticle(p: Particle): Boolean {
-            // 7. Alpha management
-            val finalAlpha = calculateParticleAlpha(p)
-
-            return (finalAlpha < 4 || p.radius < 1.5f)
+            val totalDuration = colorTransitionDuration + fadeOutDuration
+            return p.age > totalDuration || p.radius < 1.5f
         }
 
         private fun drawParticle(p: Particle, canvas: Canvas) {
