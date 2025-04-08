@@ -32,10 +32,10 @@ class Particle(
 ) {
 
     private var initialRadius: Float = radius  // Particle's initial radius size at creation time
-    val sizeRatio: Float
-        get() = (radius / initialRadius.coerceAtLeast(1f)).coerceIn(0.1f, 1f)
 //    val sizeRatio: Float
-//        get() = radius.coerceIn(0.1f, 1f)
+//        get() = (radius / initialRadius.coerceAtLeast(1f)).coerceIn(0.1f, 1f)
+    val sizeRatio: Float
+        get() = (radius/29f).coerceIn(0.1f, 1f)
 
     fun getCurrentColor(start: Int, end: Int, transitionDuration: Long): Int {
         val durationSeconds = transitionDuration.toFloat().div(1000)
