@@ -155,13 +155,13 @@ class SmokeWallpaperService : WallpaperService() {
 
         private fun updateAndDrawParticles(canvas: Canvas) {
             val now = System.nanoTime()
-            val deltaTimeMillis = (now - lastUpdateTime) / 1_000_000  // ns → ms
+            val deltaTime = (now - lastUpdateTime).toFloat().div(1_000_000_000)  // ns → seconds
             lastUpdateTime = now
 
             // Clear the canvas
             canvas.drawColor(Color.BLACK)
             generateNewParticles()
-            processExistingParticles(canvas, deltaTimeMillis)
+            processExistingParticles(canvas, deltaTime)
         }
 
         // Generate new particles while touching
@@ -193,7 +193,7 @@ class SmokeWallpaperService : WallpaperService() {
             )
         }
 
-        private fun processExistingParticles(canvas: Canvas, deltaTimeMillis: Long) {
+        private fun processExistingParticles(canvas: Canvas, deltaTime: Float) {
             synchronized(particleLock) {
                 val iterator = particles.iterator()
                 while (iterator.hasNext()) {
@@ -208,8 +208,8 @@ class SmokeWallpaperService : WallpaperService() {
                         continue
                     }
 
-                    // Update age in milliseconds
-                    p.age += deltaTimeMillis
+                    // Update age in seconds
+                    p.age += deltaTime
                     updateParticlePhysicsAndDecay(p)
                     drawParticle(p, canvas)
                 }
@@ -247,8 +247,8 @@ class SmokeWallpaperService : WallpaperService() {
 
         private fun calculateParticleAlpha(p: Particle): Int {
             // 1. Calculate lifecycle phases
-            val fadeProgress = if (p.age > colorTransitionDuration) {
-                ((p.age - colorTransitionDuration) / fadeOutDuration.toFloat()).coerceIn(0f, 1f)
+            val fadeProgress = if (p.age > colorTransitionDuration.toFloat().div(1000)) {
+                ((p.age - colorTransitionDuration.toFloat().div(1000)) / fadeOutDuration.toFloat().div(1000)).coerceIn(0f, 1f)
             } else 0f
 
             // 7. Alpha management
@@ -258,8 +258,8 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         private fun shouldRemoveParticle(p: Particle): Boolean {
-            val totalDuration = colorTransitionDuration + fadeOutDuration
-            return p.age > totalDuration || p.radius < 1.5f
+            val maxAge = (colorTransitionDuration + fadeOutDuration).toFloat().div(1000)
+            return p.age > maxAge || p.radius < 1.5f
         }
 
         private fun drawParticle(p: Particle, canvas: Canvas) {

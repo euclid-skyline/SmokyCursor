@@ -28,7 +28,7 @@ class Particle(
     var rotation: Float,
     var rotationSpeed: Float,
 
-    var age: Long = 0L  // Particle's age in milliseconds
+    var age: Float = 0f  // Particle's age in seconds
 ) {
 
     private var initialRadius: Float = radius  // Particle's initial radius size at creation time
@@ -38,7 +38,8 @@ class Particle(
 //        get() = radius.coerceIn(0.1f, 1f)
 
     fun getCurrentColor(start: Int, end: Int, transitionDuration: Long): Int {
-        val progress = age.toFloat().div(transitionDuration).coerceIn(0f, 1f)
+        val durationSeconds = transitionDuration.toFloat().div(1000)
+        val progress = age.div(durationSeconds).coerceIn(0f, 1f)
         return lerpColor(start, end, progress)
     }
 
@@ -72,7 +73,7 @@ class Particle(
         this.floatForce = floatForce
         this.rotation = rotation
         this.rotationSpeed = rotationSpeed
-        this.age = 0L   // Reset the age counter
+        this.age = 0f   // Reset the age counter
     }
 
     // Factory method to create a new Particle instance
