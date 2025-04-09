@@ -7,6 +7,7 @@ import android.view.SurfaceHolder
 import kotlin.math.*
 import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
+import kotlin.random.Random
 
 class SmokeWallpaperService : WallpaperService() {
 
@@ -115,7 +116,7 @@ class SmokeWallpaperService : WallpaperService() {
             drawJob = launch {
                 while (isVisible) {
                     drawFrame()
-                    delay(16)  // ~60 FPS
+                    delay(16)  // Target 60 FPS (1000ms / 60 frames ≈ 16.67ms per frame)
                 }
             }
         }
@@ -176,20 +177,24 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         private fun createParticleInstance(): Particle {
-            val angle = (Math.random() * 2 * PI).toFloat()
-            val speed = (Math.random() * 3.8 + 1.8).toFloat()
+            val angle = Random.nextDouble(0.0, 2 * PI).toFloat()
+            val speed = Random.nextDouble(1.8, 5.6).toFloat() // Adjusted speed range
 
             return ParticlePool.obtain(
                 x = touchX,
                 y = touchY,
-                radius = (Math.random() * 24 + 14).toFloat(),
+                radius = Random.nextDouble(14.0, 38.0).toFloat(), // Adjusted radius range
                 velocityX = cos(angle) * speed,
                 velocityY = sin(angle) * speed,
                 baseDecay = touchDecay,
                 alpha = 255,
-                floatForce = (Math.random() * baseFloatForce - baseFloatForce/2).toFloat(),
-                rotation = (Math.random() * 360).toFloat(),
-                rotationSpeed = (Math.random() * baseRotationSpeed - baseRotationSpeed/2).toFloat(),
+                floatForce = Random.nextDouble((-baseFloatForce / 2).toDouble(),
+                    (baseFloatForce / 2).toDouble()
+                ).toFloat(),
+                rotation = Random.nextDouble(0.0, 360.0).toFloat(),
+                rotationSpeed = Random.nextDouble((-baseRotationSpeed / 2).toDouble(),
+                    (baseRotationSpeed / 2).toDouble()
+                ).toFloat(),
             )
         }
 
@@ -362,24 +367,30 @@ class SmokeWallpaperService : WallpaperService() {
         }
 
         // =====================================================================
-        // New FPS drawing method
+        // FPS Counter Management
         // =====================================================================
 
         private fun drawFpsOverlay(canvas: Canvas) {
             val fpsText = "FPS: ${"%.1f".format(currentFPS)}"
 
-            // Background for readability
+            // Subtle background for better readability
+            val backgroundPaint = Paint().apply {
+                color = Color.argb(100, 25, 90, 10) // Semi-transparent color
+            }
+            val textWidth = fpsPaint.measureText(fpsText)
+            // Calculate text height
+            val textBounds = Rect()
+            fpsPaint.getTextBounds(fpsText, 0, fpsText.length, textBounds)
+            val textHeight = textBounds.height()
+
             canvas.drawRect(
                 fpsPosition.x - 10f,
-                fpsPosition.y - 40f,
-                fpsPosition.x + 230f,
+                fpsPosition.y - textHeight - 10f, // Use textHeight here
+                fpsPosition.x + textWidth + 10f,
                 fpsPosition.y + 10f,
-                Paint().apply {
-                    color = Color.argb(150, 255, 150, 100)
-                }
+                backgroundPaint
             )
 
-            // FPS text
             canvas.drawText(fpsText, fpsPosition.x, fpsPosition.y, fpsPaint)
         }
 
