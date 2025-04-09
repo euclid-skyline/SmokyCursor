@@ -215,13 +215,13 @@ class SmokeWallpaperService : WallpaperService() {
 
                     // Update age in seconds
                     p.age += deltaTime
-                    updateParticlePhysicsAndDecay(p)
+                    launch { updateParticlePhysicsAndDecay(p) }
                     drawParticle(p, canvas)
                 }
             }
         }
 
-        private fun updateParticlePhysicsAndDecay(p: Particle) {
+        private suspend fun updateParticlePhysicsAndDecay(p: Particle) = withContext(Dispatchers.Default) {
             val currentTime = System.currentTimeMillis()
 
             // 2. Calculate size-impact coefficients
