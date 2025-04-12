@@ -176,6 +176,33 @@ class SmokeWallpaperService : WallpaperService() {
             }
         }
 
+        private fun processExistingParticles(canvas: Canvas, deltaTime: Float) {
+            synchronized(particleLock) {
+                val iterator = particles.iterator()
+                while (iterator.hasNext()) {
+                    val p = iterator.next()
+
+                    // This updateParticlePhysicsAndDecay() function is better called after testing the removal
+                    // of particles to avoid wasting time-consumption activities of particle physics and fade-out
+                    // calculation for particles may be removed.
+//                    p.age += deltaTime      // Update age in seconds
+//                    updateParticlePhysicsAndDecay(p)
+
+                    // 9. Remove expired particles if required
+                    if (shouldRemoveParticle(p)) {
+                        ParticlePool.recycle(p)
+                        iterator.remove()
+                        continue
+                    }
+
+                    p.age += deltaTime      // Update age in seconds
+                    updateParticlePhysicsAndDecay(p)
+
+                    drawParticle(p, canvas)
+                }
+            }
+        }
+
         private fun createParticleInstance(): Particle {
             val angle = Random.nextDouble(0.0, 2 * PI).toFloat()
             val speed = Random.nextDouble(1.8, 5.6).toFloat() // Adjusted speed range
@@ -198,30 +225,7 @@ class SmokeWallpaperService : WallpaperService() {
             )
         }
 
-        private fun processExistingParticles(canvas: Canvas, deltaTime: Float) {
-            synchronized(particleLock) {
-                val iterator = particles.iterator()
-                while (iterator.hasNext()) {
-                    val p = iterator.next()
-
-//                updateParticlePhysicsAndDecay(p)
-
-                    // 9. Remove expired particles if required
-                    if (shouldRemoveParticle(p)) {
-                        ParticlePool.recycle(p)
-                        iterator.remove()
-                        continue
-                    }
-
-                    // Update age in seconds
-                    p.age += deltaTime
-                    launch { updateParticlePhysicsAndDecay(p) }
-                    drawParticle(p, canvas)
-                }
-            }
-        }
-
-        private suspend fun updateParticlePhysicsAndDecay(p: Particle) = withContext(Dispatchers.Default) {
+        private fun updateParticlePhysicsAndDecay(p: Particle)  {
             val currentTime = System.currentTimeMillis()
 
             // 2. Calculate size-impact coefficients
